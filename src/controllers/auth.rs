@@ -1,3 +1,4 @@
+use actix_session::Session;
 use actix_web::{web::{self}, HttpResponse, Responder};
 use diesel::{ExpressionMethods, QueryDsl, RunQueryDsl};
 use serde::{Deserialize, Serialize};
@@ -41,6 +42,7 @@ pub async fn signup(
 pub async fn login(
     pool: web::Data<DbPool>,
     data: web::Json<LoginData>,
+    session: Session,
 ) -> impl Responder {
     let mut db_connection = pool.get().expect("Failed to get DB connection from pool");
 
@@ -52,6 +54,9 @@ pub async fn login(
         Ok(user) => {
             let is_valid = crate::utils::bcrypt::verify_password(&data.password, &user.password).expect("Failed to verify password");
             if is_valid {
+                let jwt_token = crate::utils::jwt::encode_user(&user).expect("Failed to encode user");
+                session.insert("jwt_token", jwt_token).expect("Failed to set session");
+                session.renew();
                 HttpResponse::Ok().json(json!({
                     "message": "Login successful",
                     "user": user
